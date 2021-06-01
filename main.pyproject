@@ -1,0 +1,3 @@
+{
+    "files": ["qml/components/InclusionPane.qml","qml/main.qml","main.py","main.qml","qml/components/CustomBtn.qml","qml/components/ExclusionPane.qml","qml/components/Running.qml","qml/components/CustomTextField.qml","qml/components/CustomSwitch.qml","qml/components/CircularProgress.qml"]
+}

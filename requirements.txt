@@ -1,0 +1,6 @@
+pip install [
+
+imagehash == 4.2.0
+pillow == 8.2.0
+pyside2 == 5.15.2
+tqdm == 4.61.0
