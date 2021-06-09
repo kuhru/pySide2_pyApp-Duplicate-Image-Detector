@@ -823,7 +823,7 @@ if __name__ == "__main__":
     main = MainWindow()
 
     app.setOrganizationName("Kuhru")
-    app.setOrganizationDomain("N/A")
+    app.setOrganizationDomain("KuhruNOINC")
     app.setWindowIcon(QIcon(os.fspath(Path(__file__).resolve().parent / "icon2.ico")))
 
     engine.rootContext().setContextProperty("backend", main)
