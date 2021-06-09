@@ -7,15 +7,18 @@ from tqdm import tqdm as tqdmBar
 from PIL import Image as PILimage
 from imagehash import ( phash, whash, dhash )
 import concurrent.futures as ConFut
-# from itertools import combinations as iterCombine
 
-"""FRONT LOGIC IMPORTS"""
+"""FRONT GUI IMPORTS"""
 from PySide2.QtGui import QGuiApplication, QIcon
 from PySide2.QtQml import QQmlApplicationEngine
 from PySide2.QtCore import QObject, QRunnable, QThreadPool, Slot, Signal, QUrl
 
 
 class tqdmMod(tqdmBar):
+    """
+    ABOUT:  This class inherits tqdm.tqdm essentially to create a function that can return the
+            current progress percent. All other things are essentially same.
+    """
     @property
     def n(self):
         return self.__n
@@ -27,10 +30,16 @@ class tqdmMod(tqdmBar):
 
     @property
     def nPerc(self):
+        """this is the important function that was not present in the original tqdm.tqdm class."""
         return (self.__n / self.total) * 100
 
 class Worker(QRunnable):
     # https://www.mfitzp.com/tutorials/multithreading-pyside-applications-qthreadpool/
+    """
+    ABOUT:  This class exists to inherit QRunnable, which essentially helps PySide2 GUI run any
+            functions in the background and let the application run free without hanging in the
+            main thread.
+    """
     def __init__(self, fn, *args, **kwargs):
         super(Worker, self).__init__()
 
@@ -65,19 +74,26 @@ class Worker(QRunnable):
         self.autoDelete()
 
 class WorkerSignals(QObject):
-    finished = Signal()  # QtCore.Signal
-    error = Signal(tuple)
-    result = Signal(object)
-    progressBar = Signal(int)
-    progressLog = Signal(str)
+    """
+    ABOUT:  This class exists to inherit QObject just to create signals for the Worker Class above
+            because a QRunnable Class cannot facilitate creation of these.
+    """
+    finished = Signal()  # Throw this signal when the thread function is finished.
+    error = Signal(tuple)  # Throw the tuple of error tracebacks if the function raises any exceptions.
+    result = Signal(object)  # Throws the return of the threaded function.
+    progressBar = Signal(int)  # Throws the current completion percentage for progressbar in front end.
+    progressLog = Signal(str)  # Throws any information to indicate the progress of background background process.
 
 class BackSideLogic():
+    """
+    ABOUT:  This is the class that carries all the data and members for the main logic of
+            finding duplicates.
+    """
     # class variables
     includeList = []  # filled by inclusion pane
     excludeList = []  # filled by exclusion pane
     exportHere = "" # export location for the detected duplicates
-    detectedDups = []  # list of detected duplicates
-    
+
     # internal flags
     flagP = True  # flag to run pHash
     flagW = False  # flag to run wHash
@@ -92,9 +108,18 @@ class BackSideLogic():
     wHashVals = []
     dHashVals = []
     myHashVals = []
+    detectedDups = []  # list of detected duplicates
     """
 
     def improperExit(self):
+        """
+        ABOUT:  If the Runner is stopped then this deletes the unnecessary duplicate
+                collector folder
+
+        PARAMETER:  None
+
+        RETURN: strings about nature of export folder
+        """
         if self.exportHere.endswith("_Duplicate_Images"):
             for r, d, f in os.walk(self.exportHere):
                 # print("length of files in {} is {}. Hence deleting and stopping program.".format(self.exportHere, len(f)))
@@ -106,6 +131,13 @@ class BackSideLogic():
         return "User's personal export folder, so preserved"
 
     def whatHashes(self):
+        """
+        ABOUT:  Creates a tuple of strings of all the hashes set to true
+
+        PARAMETER:  None
+
+        RETURN: list of all selected hashes
+        """
         allFlags = (self.flagP, self.flagW, self.flagD, self.flagMy)
         chosenFlags = []
         for ind, ele in enumerate(allFlags):
@@ -123,6 +155,16 @@ class BackSideLogic():
         return chosenFlags
 
     def generateFolderList(self, incList, excList, getPerc):
+        """
+        ABOUT:  Generates a list of folders from the include and exclude lists, just all
+                the folders and sub folders that are required for searching
+
+        PARAMETER:  incList:    list of folders to include
+                    excList:    list of folders to exclude
+                    getPerc:    signal for current percentage for front end GUI
+
+        RETURN: a list of all directories and sub-directories that contain any image.
+        """
         outListOfDirs = []
         print("Optimizing Folders List")
         with tqdmMod(total = len(incList)) as pBar:
@@ -138,6 +180,15 @@ class BackSideLogic():
         return outListOfDirs
 
     def getImages(self, listOfDirs, getPerc):
+        """
+        ABOUT:  Gets a list of all images from all the folders generated from proper folder
+                list
+
+        PARAMETER:  listOfDirs: list of all relevant directories
+                    getPerc:    signal for current percentage for front end GUI
+
+        RETURN: list of all detected images
+        """
         outListOfImgs = []
         print("Getting Image Files")
         with tqdmMod(total = len(listOfDirs)) as pBar:
@@ -154,6 +205,16 @@ class BackSideLogic():
         return outListOfImgs
 
     def makeHashLists(self, flagList, listOfImgs, getPerc, getLog):
+        """
+        ABOUT:  Runs the hashing function for all hashes selected
+
+        PARAMETER:  flagList:   list of all selected hashes
+                    listOfImgs: list of all detected images
+                    getPerc:    signal for current percentage for front end GUI
+                    getLog:     signal for general information for front end GUI
+
+        RETURN: None
+        """
         if "pHash" in flagList:
             getLog.emit("\n   Running pHash")
             self.pHashVals = self.runHashingMP(self.pHashIt, listOfImgs, getPerc)
@@ -171,6 +232,15 @@ class BackSideLogic():
             pass
 
     def runHashingMP(self, hashingFunc, listOfImgs, getPerc):
+        """
+        ABOUT:  Uses multiprocessing on the images list and executes hashing on images
+
+        PARAMETER:  hashingFunc:    the called hashing funciton
+                    listOfImgs:     list of all detected images
+                    getPerc:        signal for current percentage for front end GUI
+
+        RETURN: list of list of [hashes of single image, location of single image]
+        """
         outSomething = []
         with tqdmMod(total=len(listOfImgs)) as pBar:
             with ConFut.ProcessPoolExecutor(max_workers = os.cpu_count() - 2) as executor:
@@ -182,18 +252,39 @@ class BackSideLogic():
         return outSomething
 
     def pHashIt(self, singleImgFile):
+        """
+        ABOUT:  Uses pHash from imagehash
+
+        PARAMETER:  singleImgFile:  image location of a single image
+
+        RETURN: list of pHash and singleImgFile
+        """
         currentImg = PILimage.open(singleImgFile)
         doPHash = phash(currentImg) #, hash_size=8
         currentImg.close()
         return [str(doPHash), singleImgFile]
 
     def wHashIt(self, singleImgFile):
+        """
+        ABOUT:  Uses wHash from imagehash
+
+        PARAMETER:  singleImgFile:  image location of a single image
+
+        RETURN: list of wHash and singleImgFile
+        """
         currentImg = PILimage.open(singleImgFile)
         doWHash = whash(currentImg) #, hash_size=8
         currentImg.close()
         return [str(doWHash), singleImgFile]
 
     def dHashIt(self, singleImgFile):
+        """
+        ABOUT:  Uses dHash from imagehash
+
+        PARAMETER:  singleImgFile:  image location of a single image
+
+        RETURN: list of dHash and singleImgFile
+        """
         currentImg = PILimage.open(singleImgFile)
         doDHash = dhash(currentImg) #, hash_size=8
         currentImg.close()
@@ -203,6 +294,14 @@ class BackSideLogic():
         pass
 
     def convertHex2Bin(self, hexVal):
+        """
+        ABOUT:  Since all the hashes are returned as 16Bit hexadecimal, they are changed
+                to 64bit binaries
+
+        PARAMETER:  hexVal: a hexadecimal 16bit string
+
+        RETURN: 64bit binary number representation of hexVal
+        """
         binNumArr = []
         num = int(hexVal, 16)
         binNum = str(bin(num))[2:].zfill(64)
@@ -211,6 +310,14 @@ class BackSideLogic():
         return binNumArr
 
     def getHammingDistance(self, item1, item2):
+        """
+        ABOUT:  Gets hamming distance between two 64bit binaries
+
+        PARAMETER:  item1:  a 64bit value
+                    item2:  another 64bit value
+
+        RETURN: hamming distance between item1 and item2
+        """
         hamm = 0
         for i in range(64):
             if item1[i] != item2[i]:
@@ -219,22 +326,42 @@ class BackSideLogic():
         return hammD
 
     def runDetector(self, flagList, thresHold, getPerc, getLog):
+        """
+        ABOUT:  Calls the getDuplicate for all hashes that are selected
+
+        PARAMETER:  flagList:   list of all selected hashes
+                    thresHold:  the hamming distance threshold in percentage
+                    getPerc:    signal for current percentage for front end GUI
+                    getLog:     signal for general information for front end GUI
+
+        RETURN: extended list of duplicates for all selected hashes
+        """
+        listOfDups = []
         print("Running Duplicates Check")
         if "pHash" in flagList:
             getLog.emit("\n   Going through pHash")
-            new = self.getDuplicates(self.pHashVals, thresHold, getPerc)
-            self.detectedDups.extend(new)
+            listOfDups.extend(self.getDuplicates(self.pHashVals, thresHold, getPerc))
         if "wHash" in flagList:
             getLog.emit("\n   Going through wHash")
-            self.detectedDups.extend(self.getDuplicates(self.wHashVals, thresHold, getPerc))
+            listOfDups.extend(self.getDuplicates(self.wHashVals, thresHold, getPerc))
         if "dHash" in flagList:
             getLog.emit("\n   Going through dHash")
-            self.detectedDups.extend(self.getDuplicates(self.dHashVals, thresHold, getPerc))
+            listOfDups.extend(self.getDuplicates(self.dHashVals, thresHold, getPerc))
+        return listOfDups
 
     def getDuplicates(self, listOfHashes, threshHold, getPerc):
+        """
+        ABOUT:  Compares all combinations of 2 of hashes, without repetitions
+
+        PARAMETER:  listOfHashes:   a list of hashes, hash specific
+                    threshHold:     the hamming distance threshold in percentage
+                    getPerc:        signal for current percentage for front end GUI
+
+        RETURN: list of duplicates for a specific hash type
+        """
         duplicates = []
         lenHashes = len(listOfHashes)
-        totCycles = round((lenHashes*(lenHashes-1))/2)
+        # totCycles = round((lenHashes*(lenHashes-1))/2)
 
         with tqdmMod(total = lenHashes) as pBar:
             for i in range(lenHashes):
@@ -253,17 +380,20 @@ class BackSideLogic():
                 getPerc.emit(int(pBar.nPerc))
         return duplicates
 
-    def getDuplicates2(self, listOfHashes, threshHold, getPerc):
-        duplicates = []
-        # lim = 10000000
-        # with tqdmMod(total = lim / 100000) as pBar:
-        #     for i in range(lim):
-        #         if i % 100000 == 0:
-        #             pBar.update(1)
-        #             getPerc.emit(int(pBar.nPerc))
-        return duplicates
-
     def sendForwardToExport(self, exptLoc, listOfDups, getLog):
+        """
+        ABOUT:  Changes file names
+                from   > C:/Users/nmkzn/Desktop/welop/pix/89148536_p0.png
+                to     > C:/Users/nmkzn/Desktop/welop/extra/89148536_p0 (!(C,,,!@!Users!@!nmkzn!@!Desktop!@!welop!@!pix)!).png
+                as in  > (og path - og name) to (new path - og name - morphed og path)
+                and moves the files to the export folder. Cut, not copy.
+
+        PARAMETER:  exptLoc:    Export location
+                    listOfDups: List of all duplicates
+                    getLog:     For logging information to GUI
+
+        RETURN: string about how many files moved
+        """
         print("Moving Files...")
 
         if os.path.isdir(exptLoc) == False: return "Not a Folder"
@@ -295,9 +425,21 @@ class BackSideLogic():
         return f"Moved {totalFiles - len(unMoved)} of {totalFiles} files"
 
     def sendBackToSource(self, exptLoc, getLog):
+        """
+        ABOUT:  Changes files names
+                from    > C:/Users/nmkzn/Desktop/welop/extra/89148536_p0 (!(C,,,!@!Users!@!nmkzn!@!Desktop!@!welop!@!pix)!).png
+                to      > C:/Users/nmkzn/Desktop/welop/pix/89148536_p0.png
+                as in   > (new path - og name - morphed og path) to (og path - og name)
+                and moves files from export location to the original source.
+
+        PARAMETER:  exptLoc:    Export location
+                    getLog:     For logging information to GUI
+
+        RETURN: string about how many files moved
+        """
         print("Sending Back to Source...")
         if os.path.isdir(exptLoc) == False: return "Not a Folder"
-        
+
         allFiles = [f for r, d, f in os.walk(exptLoc)][0]
         totalFiles = len(allFiles)
         unMoved = []
@@ -306,6 +448,7 @@ class BackSideLogic():
             currentFileName = allFiles.pop()
             currentFilePath = os.path.join(exptLoc, currentFileName)
             try:
+                currentFileName = " ".join(currentFileName.split(" ")[1:])
                 newLocStartInd = currentFileName.index(" (!(")
                 newLocEndInd = currentFileName.index(")!).")
 
@@ -314,26 +457,35 @@ class BackSideLogic():
 
                 newFileName = cfpBaseNameNoExt + cfpBaseNameOnlyExt
                 newLocName = currentFileName[newLocStartInd + 4:newLocEndInd].replace("!@!", "\\").replace(",,,", ":")
+
                 newFilePath = os.path.join(newLocName, newFileName)
                 shutil.move(currentFilePath, newFilePath)
             except:
-                info = f"\n Failed to move: '{newFileName}' to\n\t '{newLocName}'"
+                info = f"\n   Failed to move: '{currentFilePath}'"
                 getLog.emit(info)
                 unMoved.append(currentFileName)
+                traceback.print_exc()
+                exctype, value = sys.exc_info()[:2]
+                print((exctype, value, traceback.format_exc()), "\n")
             else:
                 None
         
         return f"Moved {totalFiles - len(unMoved)} of {totalFiles}"
 
-    # let the application windows set up
-    # check if inputs are valid
-    # generate the folders list
-    # check if the export location exists
-    # make hashes of images
-    # start hamming distance comparison
-    # move files to new destination
-
     def codeRunnerGui(self, percProgress, logProgress):
+        """
+        ABOUT:  1. let the application windows set up
+                2. check if inputs are valid
+                3. generate the folders list
+                4. check if the export location exists
+                5. make hashes of images
+                6. start hamming distance comparison
+                7. move files to new destination
+        
+        PARAMETER:  percProgress:   connects backend progress percentage to front end
+                    logProgress:    connects backend progress information to front end
+        RETURN: None
+        """
         # let the application process window manipulation
         time.sleep(0.5)
 
@@ -388,10 +540,6 @@ class BackSideLogic():
                 info = self.improperExit()
                 logProgress.emit(f"\nERROR: {e}\n{info}")
                 return "Exiting Application: Where did you run this, you unpriviledged idiot"
-        # elif len(os.listdir(self.exportHere)) !=0:
-        #     info = self.improperExit()
-        #     logProgress.emit(f"\nERROR: '{self.exportHere}' is not empty.\n   If you think the folder is truly empty, try deleting the folder and running this again\n{info}")
-        #     return "Exiting Application"
         
         time.sleep(0.5)
 
@@ -403,7 +551,7 @@ class BackSideLogic():
 
         # comparing the hamming distance for all the files
         logProgress.emit(f"\n> Comparing Hamming Distances")
-        self.runDetector(self.flagMap, 0.16, percProgress, logProgress)
+        self.detectedDups = self.runDetector(self.flagMap, 0.16, percProgress, logProgress)
 
         time.sleep(0.5)
 
@@ -422,85 +570,35 @@ class BackSideLogic():
         logProgress.emit("\n> Successful")
         return "Successfully Completed"
 
-    def codeRunner(self, progress_callback):
-        # since moving files to and from the export folder would cause issues
-        # if self.exportHere == "":
-        #     try:
-        #         self.exportHere = os.path.join(os.getcwd(), "_Duplicate_Images")
-        #         os.mkdir(self.exportHere)
-        #     except Exception as e:
-        #         print(e)
-        #         print(self.improperExit())
-        #         return "Exiting Application: Where did you run this, you unpriviledged idiot"
-
-        # # for ease, the export folder is also not allowed to be a folder of searching
-        # self.excludeList.append(self.exportHere)
-        # # making the lists into sets to remove any easy duplicates
-        # self.includeList = set(self.includeList)
-        # self.excludeList = set(self.excludeList)
-        # # making a dictionary of hashes to be performed
-        # self.flagMap = self.whatHashes()
-        # print(self.flagMap)
-
-
-        # # if either of the lists is empty then we can't proceed.
-        # if None in (self.includeList, self.excludeList, self.flagMap):
-        #     print(self.improperExit())
-        #     return "Exiting Application: Either include, exclude or hasher not given"
-        # # else a proper list of directories is generated
-        # self.dirListFinal = self.generateFolderList(self.includeList, self.excludeList)
-
-
-        # # if no usable list of directories is found
-        # if self.dirListFinal == None:
-        #     print(self.improperExit())
-        #     return "Exiting Application: No folders were found selectable"
-        # # else a proper list of images with full path is generated
-        # self.imgListOriginal = self.getImages(self.dirListFinal)
-
-
-        # # if no usable list of images is found
-        # if self.imgListOriginal == None:
-        #     print(self.improperExit())
-        #     return "Exiting Application: No image found in specified folders"
-        # # else run hashes on the images
-        # self.makeHashLists(self.flagMap, self.imgListOriginal)
-
-
-        # # check for duplicates
-        # self.runDetector(self.flagMap, 0.16)
-
-        # print("Total Duplicates found: {}".format(len(self.detectedDups)))
-        # print(self.detectedDups)
-
-        # just in case, if this folder turns out to be useless
-        # return self.improperExit()
-        return "Ran"
-
 class MainWindow(QObject):
     def __init__(self):
         QObject.__init__(self)
-        self.data = BackSideLogic() # object of the backside class containing all data and functions
-        self.threadpool = QThreadPool() # object of the threadpool to make GUI not freeze during processing
+        self.data = BackSideLogic()  # object of the backside class containing all data and functions
+        self.threadpool = QThreadPool()  # object of the threadpool to make GUI not freeze during processing
 
     # signals for application
-    currentExport = Signal(str) # is emitted by default when no 
-    currentProgressPerc = Signal(int) # carries the current progress % from worker threads as well
-    currentProgressLog = Signal(str) # carries the console output logs from worker threads as well
+    currentExport = Signal(str)  # is emitted by default when launching the application
+    currentProgressPerc = Signal(int)  # carries the current progress % from worker threads as well
+    currentProgressLog = Signal(str)  # carries the console output logs from worker threads as well
     selfLogger = Signal(str)  # throws emit for the bonus functionality like revert to original location and open export folder
 
     # functions for the application
     @Slot()
     def setDefaultPath(self):
+        """
+        ABOUT:  sets the export folder path by default upon launching of the application"""
         self.data.exportHere = os.path.join(os.getcwd(), "_Duplicate_Images")  # default export location for the detected duplicates
         self.currentExport.emit(self.data.exportHere)
 
     @Slot(str)
     def changeAlgo(self, checkThis):
         """
-        for raising flags as in what algo the main application is running
-        this can run all algos, for the correct set of flags.
-        @parameter: @checkThis: an algo name, comes from the switches in the application
+        ABOUT:  for raising flags as in what algo the main application is running this
+                can run all algos, for the correct set of flags.
+
+        PARAMETER:  checkThis:  an algo name, comes from the switches in the application
+
+        RETURN: None
         """
         print(checkThis)
         if checkThis == "pHash":
@@ -515,31 +613,61 @@ class MainWindow(QObject):
 
     @Slot(str)
     def selectFolder(self, filepath):
+        """
+        ABOUT:  When an include folder is selected in front end, it gets logged in the backend
+
+        PARAMETER:  filepath:   the path of the folder to be included
+
+        RETURN: None
+        """
         newLocation = QUrl(filepath).toLocalFile()
         self.data.includeList.append(newLocation)
         print(self.data.includeList)
 
     @Slot(str)
     def deSelectFolder(self, filepath):
+        """
+        ABOUT:  When an exclude folder is selected in front end, it gets logged in the backend
+
+        PARAMETER:  filepath:   the path of the folder to be excluded
+
+        RETURN: None
+        """
         newLocation = QUrl(filepath).toLocalFile()
         self.data.excludeList.append(newLocation)
         print(self.data.excludeList)
 
     @Slot(str)
     def exportFolder(self, filepath):
+        """
+        ABOUT:  When the export folder is changed in the front end, it gets logged in the backend
+
+        PARAMETER:  filepath:   the path of the folder to be export folder
+
+        RETURN: None
+        """
         newLocation = QUrl(filepath).toLocalFile()
         self.data.exportHere = newLocation
 
     @Slot(str)
     def clearListSelection(self, flag):
+        """
+        ABOUT:  Empties the include or exclude folders list in backend
+
+        PARAMETER:  flag:   which folders list to empty
+
+        RETURN: None
+        """
         if flag == "excluded":
             self.data.excludeList.clear()
         elif flag == "included":
             self.data.includeList.clear()
-        pass
 
     @Slot()
     def openExportsFolder(self):
+        """
+        ABOUT:  Opens the current export folder in file explorer
+        """
         if os.path.isdir(self.data.exportHere) == False:
             self.forSelfLogger("Folder Doesn't Exist, Opening Parent...")
             try:
@@ -550,10 +678,14 @@ class MainWindow(QObject):
                 return "Exiting Application: Where did you run this, you unpriviledged idiot"
         self.forSelfLogger("Opening Export Folder Now")
         webbrowser.open(os.path.realpath(self.data.exportHere))
-        pass
 
     @Slot()
     def trySendFilesBack(self):
+        """
+        ABOUT:  Sends files back to the source from the export folder
+
+        RETURN: string about how many files moved
+        """
         if os.path.isdir(self.data.exportHere) == False:
             self.forSelfLogger("Export Folder Doesn't Exist")
             return print("Folder Doesn't Exist")
@@ -562,12 +694,13 @@ class MainWindow(QObject):
         if totalFiles == 0:
             self.forSelfLogger("No Usable Files Found")
             return print("No usable files found")
-
         unMoved = []
+
         while len(allFiles) != 0:
             currentFileName = allFiles.pop()
             currentFilePath = os.path.join(self.data.exportHere, currentFileName)
             try:
+                # currentFileName = " ".join(currentFileName.split(" ")[1:])
                 newLocStartInd = currentFileName.index(" (!(")
                 newLocEndInd = currentFileName.index(")!).")
 
@@ -576,12 +709,16 @@ class MainWindow(QObject):
 
                 newFileName = cfpBaseNameNoExt + cfpBaseNameOnlyExt
                 newLocName = currentFileName[newLocStartInd + 4:newLocEndInd].replace("!@!", "\\").replace(",,,", ":")
+
                 newFilePath = os.path.join(newLocName, newFileName)
                 shutil.move(currentFilePath, newFilePath)
             except:
-                info = f"\n Failed to move: '{newFileName}' to\n\t '{newLocName}'"
+                info = f"\n Failed to move: '{currentFilePath}'"
                 print(info)
                 unMoved.append(currentFileName)
+                traceback.print_exc()
+                exctype, value = sys.exc_info()[:2]
+                print((exctype, value, traceback.format_exc()), "\n")
             else:
                 None
 
@@ -594,23 +731,32 @@ class MainWindow(QObject):
 
     @Slot()
     def ensureExit(self):
+        """
+        ABOUT:  just for calling a backend function.
+        """
         self.data.improperExit()
 
     @Slot()
     def startRunning(self):
-        self.data.codeRunnerGui(self.currentProgressPerc, self.currentProgressLog)
-        # self.worker = Worker(self.data.codeRunnerGui)
+        """
+        ABOUT:  creates a new thread and worker instance, and runs the backend logic on it
+                so that the main application window doesn't freeze
+        """
+        # self.data.codeRunnerGui(self.currentProgressPerc, self.currentProgressLog)
+        self.worker = Worker(self.data.codeRunnerGui)
 
-        # self.worker.signals.progressBar.connect(self.newCurrentProgressPerc)
-        # self.worker.signals.progressLog.connect(self.newCurrentProgressMessage)
-        # self.worker.signals.result.connect(self.functionReturnMessage)
-        # self.worker.signals.finished.connect(self.whenTaskComplete)
+        self.worker.signals.progressBar.connect(self.newCurrentProgressPerc)
+        self.worker.signals.progressLog.connect(self.newCurrentProgressMessage)
+        self.worker.signals.result.connect(self.functionReturnMessage)
+        self.worker.signals.finished.connect(self.whenTaskComplete)
 
-        # self.threadpool.start(self.worker)
-        pass
+        self.threadpool.start(self.worker)
 
     @Slot()
     def stopRunning(self):
+        """
+        ABOUT:  stop the backend function from running and end the application
+        """
         app.deleteLater()
 
         # self.threadpool.clear()
@@ -621,23 +767,53 @@ class MainWindow(QObject):
         # sys.exit()
         
         # sys.exit(app)
-        pass
 
     def forSelfLogger(self, infoString):
+        """
+        ABOUT:  prints a string on the front end GUI from the main GUI thread
+
+        PARAMETER:  infoString: the string to be printed
+
+        RETURN: None
+        """
         self.selfLogger.emit(infoString)
         print(infoString)
 
     def newCurrentProgressPerc(self, percentage):
+        """
+        ABOUT:  prints the percentage value on the front end GUI from the worker thread
+
+        PARAMETER:  percentage: the current progressbar percentage value of worker thread
+
+        RETURN: None
+        """
         self.currentProgressPerc.emit(percentage)
 
     def newCurrentProgressMessage(self, text):
+        """
+        ABOUT:  prints the information string on the front end GUI from the worker thread
+
+        PARAMETER:  text:   information about progress about the worker thread
+
+        RETURN: None
+        """
         print(text)
         self.currentProgressLog.emit(text)
 
     def functionReturnMessage(self, functionReturn):
+        """
+        ABOUT:  prints the worker thread's return
+
+        PARAMETER:  functionReturn: the returned value of the worker thread
+
+        RETURN: None
+        """
         print(functionReturn)
 
     def whenTaskComplete(self):
+        """
+        ABOUT:  Just a placeholder function
+        """
         print("Completed")
 
 if __name__ == "__main__":
