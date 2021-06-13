@@ -326,21 +326,21 @@ Window {
                 conditional: "dHash"
 
                 anchors.left: parent.left
-                anchors.bottom: switchMy.top
-                anchors.bottomMargin: 16
-                anchors.leftMargin: 25
-            }
-            CustomSwitch {
-                id: switchMy
-                text: "Custom Algorithm"
-                switchLabel: "Custom Algorithm"
-                conditional: "myHash"
-
-                anchors.left: parent.left
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: 20
                 anchors.leftMargin: 25
             }
+//            CustomSwitch {
+//                id: switchMy
+//                text: "Custom Algorithm"
+//                switchLabel: "Custom Algorithm"
+//                conditional: "myHash"
+
+//                anchors.left: parent.left
+//                anchors.bottom: parent.bottom
+//                anchors.bottomMargin: 20
+//                anchors.leftMargin: 25
+//            }
 
         }
 

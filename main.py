@@ -54,10 +54,13 @@ class Worker(QRunnable):
         self.kwargs['logProgress'] = self.signals.progressLog
 
     @Slot()
+    # print(run())
+    # print(run)
     def run(self):
         # Retrieve args/kwargs here; and fire processing using them
         try:
             result = self.fn(*self.args, **self.kwargs)
+            #result = codeRunnerGUI(perc, log)
         except KeyboardInterrupt as key:
             print(f"\nEnding Life Guys because {key}")
             self.stop()
@@ -101,12 +104,12 @@ class BackSideLogic():
     flagMy = False  # flag to run custom hashing
 
     """
-    flagMap = [] # is a list of all flags that are true
+    flagMap = () # is a list of all flags that are true
     dirListFinal = []  # generated later using generateFolderList()
     imgListOriginal = [] # only the list of full paths of all useful image files from all directories    
-    pHashVals = []
-    wHashVals = []
-    dHashVals = []
+    pHashVals = [[hash, imgSource],[]]
+    wHashVals = [[hash, imgSource],[]]
+    dHashVals = [[hash, imgSource],[]]
     myHashVals = []
     detectedDups = []  # list of detected duplicates
     """
@@ -177,6 +180,7 @@ class BackSideLogic():
                             outListOfDirs.append(r)
                 pBar.update(1)
                 getPerc.emit(int(pBar.nPerc))
+        print(outListOfDirs)
         return outListOfDirs
 
     def getImages(self, listOfDirs, getPerc):
@@ -478,10 +482,10 @@ class BackSideLogic():
                 2. check if inputs are valid
                 3. generate the folders list
                 4. check if the export location exists
-                5. make hashes of images
+                5. make hashes of images (parallel)
                 6. start hamming distance comparison
                 7. move files to new destination
-        
+
         PARAMETER:  percProgress:   connects backend progress percentage to front end
                     logProgress:    connects backend progress information to front end
         RETURN: None
@@ -496,6 +500,7 @@ class BackSideLogic():
             return "Exiting Application"
 
         # remove obvious redundancies in the lists
+        self.exportHere.replace("/", "\\")
         self.excludeList.append(self.exportHere) # just for removing confusion
         # self.includeList = set(self.includeList) # removing duplicates
         # self.excludeList = set(self.excludeList) # same ^
@@ -551,7 +556,7 @@ class BackSideLogic():
 
         # comparing the hamming distance for all the files
         logProgress.emit(f"\n> Comparing Hamming Distances")
-        self.detectedDups = self.runDetector(self.flagMap, 0.16, percProgress, logProgress)
+        self.detectedDups = self.runDetector(self.flagMap, 0.21, percProgress, logProgress)
 
         time.sleep(0.5)
 
@@ -621,7 +626,7 @@ class MainWindow(QObject):
         RETURN: None
         """
         newLocation = QUrl(filepath).toLocalFile()
-        self.data.includeList.append(newLocation)
+        self.data.includeList.append(newLocation.replace("/", "\\"))
         print(self.data.includeList)
 
     @Slot(str)
@@ -634,7 +639,7 @@ class MainWindow(QObject):
         RETURN: None
         """
         newLocation = QUrl(filepath).toLocalFile()
-        self.data.excludeList.append(newLocation)
+        self.data.excludeList.append(newLocation.replace("/", "\\"))
         print(self.data.excludeList)
 
     @Slot(str)
