@@ -85,19 +85,3 @@ This will move the files back to their original source.
 
 ---
 # This is a College Project
-Reduce the image into 32×32-pixel size
-Convert the small image to greyscale.
-Transform the greyscale image using DCT (Discrete Cosine Transform).
-Slice only the top-left 8×8 from 32×32 DCT.
-Calculate average of the above obtained matrix excluding the [0][0] index.
-initialize a new 8×8 matrix.
-if mean > topLeft[i][j]
-    new[i][j] = 1
-else
-    new[i][j] = 0
-calculate the hash of 64 bits.
-calculate Hamming distance from hash received from other images.
-if number of different bits lies between 1 to 10
-    implies images are same.
-else if different bits>10
-    implies different images.
